@@ -1,0 +1,119 @@
+# Andaç Berkay Seval 2235521
+
+.pos 0
+init:
+	irmovq stack, %rsp
+	call main
+	halt
+
+.pos 0x200
+root:
+	.quad 5
+	.quad node7
+	.quad node12
+node7:
+	.quad 7
+	.quad node25
+	.quad node905
+node25:
+	.quad 25
+	.quad 0
+	.quad 0
+node905:
+	.quad 905
+	.quad nodem1
+	.quad 0
+nodem1:
+	.quad -1
+	.quad 0
+	.quad 0
+node12:
+	.quad 12
+	.quad node219
+	.quad nodem10
+node219:
+	.quad 219
+	.quad 0
+	.quad 0
+nodem10:
+	.quad -10
+	.quad 0
+	.quad node331
+node331:
+	.quad 331
+	.quad 0
+	.quad 0
+
+main:
+	irmovq root, %rdi
+	call max_btree
+	ret
+
+max_btree:
+	andq %rdi, %rdi
+	je empty
+body:
+	pushq %rdx
+	pushq %rbx
+	pushq %r12
+	rrmovq %rdi, %rbx
+	irmovq $0x8000000000000000, %rdx
+	mrmovq 8(%rdi), %rdi
+	call max_btree
+	rrmovq %rax, %rcx
+	rrmovq %rax, %r12
+	mrmovq 16(%rbx), %rdi
+	xorq %rdx, %rcx
+	je body1
+	call max_btree
+	rrmovq %rax, %rsi
+	rrmovq %rax, %r13
+	mrmovq (%rbx), %r14
+	xorq %rdx, %rsi
+	je body2
+	subq %r14, %r13
+	cmovl %r14, %rax
+	rrmovq %rax, %r13
+	subq %r12, %r13
+	cmovl %r12, %rax
+	popq %r12
+	popq %rbx
+	popq %rdx
+	ret
+body1:
+	call max_btree
+	rrmovq %rax, %rsi
+	rrmovq %rax, %r13	
+	mrmovq (%rbx), %r14
+	xorq %rdx, %rsi
+	je body3
+	subq %r14, %r13
+	cmovl %r14, %rax
+	rrmovq %rax, %r13
+	subq %r12, %r13
+	cmovl %r12, %rax
+	popq %r12
+	popq %rbx
+	popq %rdx
+	ret
+body2:
+	rrmovq %r14, %rax
+	subq %r12, %r14
+	cmovl %r12, %rax
+	popq %r12
+	popq %rbx
+	popq %rdx
+	ret
+body3:
+	rrmovq %r14, %rax
+	popq %r12
+	popq %rbx
+	popq %rdx
+	ret
+		
+empty: 
+	irmovq $0x8000000000000000, %rax
+	ret
+	
+.pos 0x800
+stack:

@@ -1,0 +1,268 @@
+#/* $begin absrev-ys */
+##################################################################
+# absrev.ys - Reverse a src block of len words to dst.
+# Return the sum of absolute values of words contained in src.
+#
+# Andaç Berkay Seval 2235521
+# 
+# 1) First of all, in the first part of the code, instead of adding 8 times %rdx to %rcx, I changed the logic and once %rdx was moved to %rcx, I added 3 times %rcx to itself.
+#    Logic is simple, firstly, it was len, then with first adding it was 2*len, then with second adding it was 4*len, then with third adding it was 8*len. Unfortunately, CPE
+#    was reduced from 17.83 to 17.46.(too small)
+# 2) Second of all, I used loop unrolling for groups 8 - 9 - 10. Probably group of 11 was exceeding 1000 byte so I chose 10 (best performance, 948 byte). CPE was reduced from 17.46 to 10.71. Of course,
+#    I arranged places of some irmovq, mrmovq and rmmovq instructions to avoid data hazards. I tried not to use these instructions one after another if they operate on the same registers.
+#    The P1-10 parts of the code belong to the loop unrolling. If array containts less than 10 elements or less than 10 elements are remaining in the array, T0-18 parts of the code are executed.
+#    In T0-18 parts of the code, len is decremanted one by one to get array empty.
+# 3) I did not change anything in pipe-full.hcl. Since imcpq was already implemented, I used this instruction a couple of times for comparing %rdx with 10 (loop unrolling). Because of that, I could not
+#    manage to reduce CPE more. Average CPE is 10.71.
+# 4) Major Update! I implemented leaq in pipe-full.hcl and used it in my code for some addq and subq instruction (ex: instead of irmovq $8, %r8 / subq %r8, %rcx, directly leaq -8(%rcx), %rcx). CPE was
+#    reduced from 10.71 to 10.49.
+##################################################################
+# Do not modify this portion
+# Function prologue.
+# %rdi = src, %rsi = dst, %rdx = len
+absrev:
+##################################################################
+# You can modify this portion
+    # Loop header
+    xorq %rax,%rax    	# sum = 0;
+    
+    # all this for dst_rev = dst + len - 1
+
+    rrmovq %rdx, %rcx   
+    addq %rcx, %rcx   
+    addq %rcx, %rcx
+    addq %rcx, %rcx			    
+    addq %rsi, %rcx
+    leaq -8(%rcx), %rcx      
+
+    icmpq $10, %rdx    	
+    jl T0            
+Loop:    
+    mrmovq (%rdi), %r8
+    mrmovq 8(%rdi), %r9
+    mrmovq 16(%rdi), %r10
+    mrmovq 24(%rdi), %r12
+    mrmovq 32(%rdi), %r13
+    rmmovq %r8, (%rcx)
+    rmmovq %r9, -8(%rcx)
+    rmmovq %r10, -16(%rcx)
+    rmmovq %r12, -24(%rcx)
+    rmmovq %r13, -32(%rcx)
+    andq %r8, %r8    	
+    jge P1       
+    rrmovq %r8, %r11   
+    xorq %r8, %r8     
+    subq %r11, %r8      
+P1:
+    addq %r8, %rax   
+    andq %r9, %r9
+    jge P2
+    rrmovq %r9, %r11
+    xorq %r9, %r9
+    subq %r11, %r9   
+P2: 
+    addq %r9, %rax
+    andq %r10, %r10
+    jge P3
+    rrmovq %r10, %r11
+    xorq %r10, %r10
+    subq %r11, %r10 
+P3:
+    addq %r10, %rax
+    andq %r12, %r12
+    jge P4
+    rrmovq %r12, %r11
+    xorq %r12, %r12
+    subq %r11, %r12
+P4:
+    addq %r12, %rax
+    andq %r13, %r13
+    jge P5
+    rrmovq %r13, %r11
+    xorq %r13, %r13
+    subq %r11, %r13  
+P5:
+    addq %r13, %rax
+    mrmovq 40(%rdi), %r8
+    mrmovq 48(%rdi), %r9
+    mrmovq 56(%rdi), %r10
+    mrmovq 64(%rdi), %r12
+    mrmovq 72(%rdi), %r13
+    rmmovq %r8, -40(%rcx)
+    rmmovq %r9, -48(%rcx)
+    rmmovq %r10, -56(%rcx)
+    rmmovq %r12, -64(%rcx)
+    rmmovq %r13, -72(%rcx)
+    andq %r8, %r8
+    jge P6
+    rrmovq %r8, %r11
+    xorq %r8, %r8
+    subq %r11, %r8
+P6:
+    addq %r8, %rax
+    andq %r9, %r9
+    jge P7
+    rrmovq %r9, %r11
+    xorq %r9, %r9
+    subq %r11, %r9
+P7:
+    addq %r9, %rax
+    andq %r10, %r10
+    jge P8
+    rrmovq %r10, %r11
+    xorq %r10, %r10
+    subq %r11, %r10
+P8:
+    addq %r10, %rax
+    andq %r12, %r12
+    jge P9
+    rrmovq %r12, %r11
+    xorq %r12, %r12
+    subq %r11, %r12
+P9:
+    addq %r12, %rax
+    andq %r13, %r13
+    jge P10
+    rrmovq %r13, %r11
+    xorq %r13, %r13
+    subq %r11, %r13
+P10:
+    addq %r13, %rax
+    leaq 80(%rdi), %rdi
+    leaq -80(%rcx), %rcx
+    leaq -10(%rdx), %rdx
+    icmpq $10, %rdx
+    jge Loop
+
+T0:
+    andq %rdx, %rdx
+    jg T1
+    ret
+
+T1:
+    irmovq $1, %r12
+    mrmovq (%rdi), %r8
+    mrmovq 8(%rdi), %r9
+    rmmovq %r8, (%rcx)
+    andq %r8, %r8
+    jge T2
+    rrmovq %r8, %r11   
+    xorq %r8, %r8     
+    subq %r11, %r8
+T2:
+    addq %r8, %rax
+    subq %r12, %rdx
+    jg T3
+    ret
+T3:
+    rmmovq %r9, -8(%rcx)
+    andq %r9, %r9
+    jge T4
+    rrmovq %r9, %r11   
+    xorq %r9, %r9     
+    subq %r11, %r9
+T4:
+    addq %r9, %rax
+    subq %r12, %rdx
+    jg T5
+    ret
+T5:
+    mrmovq 16(%rdi), %r8
+    mrmovq 24(%rdi), %r9
+    rmmovq %r8, -16(%rcx)
+    andq %r8, %r8
+    jge T6
+    rrmovq %r8, %r11   
+    xorq %r8, %r8  
+    subq %r11, %r8
+T6:
+    addq %r8, %rax
+    subq %r12, %rdx
+    jg T7
+    ret
+T7: 
+    rmmovq %r9, -24(%rcx)
+    andq %r9, %r9
+    jge T8
+    rrmovq %r9, %r11   
+    xorq %r9, %r9    
+    subq %r11, %r9
+T8:
+    addq %r9, %rax
+    subq %r12, %rdx
+    jg T9
+    ret
+T9:
+    mrmovq 32(%rdi), %r8
+    mrmovq 40(%rdi), %r9
+    rmmovq %r8, -32(%rcx)
+    andq %r8, %r8
+    jge T10
+    rrmovq %r8, %r11   
+    xorq %r8, %r8     
+    subq %r11, %r8
+T10:
+    addq %r8, %rax
+    subq %r12, %rdx
+    jg T11
+    ret
+T11:
+    rmmovq %r9, -40(%rcx)
+    andq %r9, %r9
+    jge T12
+    rrmovq %r9, %r11   
+    xorq %r9, %r9    
+    subq %r11, %r9
+T12:
+    addq %r9, %rax
+    subq %r12, %rdx
+    jg T13
+    ret
+T13:
+    mrmovq 48(%rdi), %r8
+    mrmovq 56(%rdi), %r9
+    rmmovq %r8, -48(%rcx)
+    andq %r8, %r8
+    jge T14
+    rrmovq %r8, %r11   
+    xorq %r8, %r8     
+    subq %r11, %r8
+T14:
+    addq %r8, %rax
+    subq %r12, %rdx
+    jg T15
+    ret
+T15:
+    rmmovq %r9, -56(%rcx)
+    andq %r9, %r9
+    jge T16
+    rrmovq %r9, %r11   
+    xorq %r9, %r9     
+    subq %r11, %r9
+T16:
+    addq %r9, %rax
+    subq %r12, %rdx
+    jg T17
+    ret
+T17:
+    mrmovq 64(%rdi), %r8
+    rmmovq %r8, -64(%rcx)
+    andq %r8, %r8
+    jge T18
+    rrmovq %r8, %r11
+    xorq %r8, %r8
+    subq %r11, %r8
+T18:
+    addq %r8, %rax
+
+    
+       
+##################################################################
+# Do not modify the following section of code
+# Function epilogue.
+Done:
+    ret
+##################################################################
+# Keep the following label at the end of your function
+End:
+#/* $end absrev-ys */
